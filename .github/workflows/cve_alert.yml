@@ -2,7 +2,7 @@ name: CVE Email Alerts
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Every hour
+    - cron: '0 */12 * * *'  # Every 12 hour
 
 jobs:
   send-cve-alerts:
