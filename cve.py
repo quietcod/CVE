@@ -8,7 +8,7 @@ import json
 NVD_RSS_URL = "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml"
 EMAIL_USER = os.getenv("EMAIL_USER")  # Your email address (from GitHub Secrets)
 EMAIL_PASS = os.getenv("EMAIL_PASS")  # Your email app password (from GitHub Secrets)
-RECIPIENTS = ["recipient1@example.com", "recipient2@example.com"]  # Add emails here
+RECIPIENTS = ["gshubh270@gmail.com"]  # Add emails here
 
 # File to store seen entries for deduplication
 SEEN_FILE = "seen_cves.json"
@@ -55,3 +55,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
