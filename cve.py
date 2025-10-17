@@ -6,11 +6,11 @@ import json
 
 # Configuration
 NVD_RSS_URL = "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml"
-EMAIL_USER = os.getenv("EMAIL_USER")  # Your email address (from GitHub Secrets)
-EMAIL_PASS = os.getenv("EMAIL_PASS")  # Your email app password (from GitHub Secrets)
-RECIPIENTS = ["quietcod@protonmail.com", "raghu@thesunrisecomputers.com"]  # Add emails here
+EMAIL_USER = os.getenv("EMAIL_USER")  # Sender email from GitHub Secrets
+EMAIL_PASS = os.getenv("EMAIL_PASS")  # App password from GitHub Secrets
+RECIPIENTS = ["quietcod@protonmail.com", "raghu@thesunrisecomputers.com"]
 
-# File to store seen entries for deduplication
+# File to store seen CVEs for deduplication
 SEEN_FILE = "seen_cves.json"
 
 def load_seen():
@@ -30,15 +30,20 @@ def save_seen(seen):
         json.dump(list(seen), f)
 
 def send_email(subject, body, recipients):
-    msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['From'] = EMAIL_USER
-    msg['To'] = ", ".join(recipients)
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.sendmail(EMAIL_USER, recipients, msg.as_string())
+    try:
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = EMAIL_USER
+        msg['To'] = ", ".join(recipients)
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.sendmail(EMAIL_USER, recipients, msg.as_string())
+        print("Email sent successfully.")
+    except Exception as e:
+        print(f"Error sending email: {e}")
 
 def main():
+    print("Fetching latest CVE feed...")
     feed = feedparser.parse(NVD_RSS_URL)
 
     if not feed.entries:
@@ -49,18 +54,20 @@ def main():
     new_entries = []
 
     for entry in feed.entries:
-        cve_id = entry.title  # CVE-xxxx-xxxx
+        cve_id = entry.title.strip()
         if cve_id not in seen:
             new_entries.append(entry)
             seen.add(cve_id)
 
     if new_entries:
+        print(f"Found {len(new_entries)} new CVE(s). Sending alerts...")
         for entry in new_entries:
             subject = f"New CVE Published: {entry.title}"
             body = f"{entry.title}\n\n{entry.summary}\n\nLink: {entry.link}"
             send_email(subject, body, RECIPIENTS)
             print(f"Sent alert for {entry.title}")
         save_seen(seen)
+        print("Updated seen_cves.json file.")
     else:
         print("No new CVEs found. Nothing to update.")
 
