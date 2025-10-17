@@ -8,7 +8,7 @@ import json
 NVD_RSS_URL = "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml"
 EMAIL_USER = os.getenv("EMAIL_USER")  # Your email address (from GitHub Secrets)
 EMAIL_PASS = os.getenv("EMAIL_PASS")  # Your email app password (from GitHub Secrets)
-RECIPIENTS = ["quietcod@protonmail.com","raghu@thesunrisecomputers.com"]  # Add emails here
+RECIPIENTS = ["quietcod@protonmail.com", "raghu@thesunrisecomputers.com"]  # Add emails here
 
 # File to store seen entries for deduplication
 SEEN_FILE = "seen_cves.json"
@@ -19,9 +19,10 @@ def load_seen():
             try:
                 return set(json.load(f))
             except json.JSONDecodeError:
+                print("Warning: seen_cves.json is corrupted, starting fresh.")
                 return set()
     else:
-        print("NO seen_cves.json found, creating new one ...")
+        print("No seen_cves.json found, creating new one...")
         return set()
 
 def save_seen(seen):
@@ -39,6 +40,11 @@ def send_email(subject, body, recipients):
 
 def main():
     feed = feedparser.parse(NVD_RSS_URL)
+
+    if not feed.entries:
+        print("Error: Failed to fetch CVE data. Check network or NVD feed URL.")
+        return
+
     seen = load_seen()
     new_entries = []
 
@@ -56,10 +62,7 @@ def main():
             print(f"Sent alert for {entry.title}")
         save_seen(seen)
     else:
-        print("No new CVEs found.")
+        print("No new CVEs found. Nothing to update.")
 
 if __name__ == "__main__":
     main()
-
-
-
