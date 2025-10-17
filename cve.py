@@ -16,8 +16,13 @@ SEEN_FILE = "seen_cves.json"
 def load_seen():
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE, "r") as f:
-            return set(json.load(f))
-    return set()
+            try:
+                return set(json.load(f))
+            except json.JSONDecodeError:
+                return set()
+    else:
+        print("NO seen_cves.json found, creating new one ...")
+        return set()
 
 def save_seen(seen):
     with open(SEEN_FILE, "w") as f:
@@ -55,5 +60,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
