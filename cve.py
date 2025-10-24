@@ -1,16 +1,16 @@
-import feedparser
+import requests
 import smtplib
 from email.mime.text import MIMEText
 import os
 import json
 
 # Configuration
-NVD_RSS_URL = "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml"
-EMAIL_USER = os.getenv("EMAIL_USER")  # Sender email from GitHub Secrets
-EMAIL_PASS = os.getenv("EMAIL_PASS")  # App password from GitHub Secrets
+NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0/?resultsPerPage=2000&pubStartDate=2023-01-01T00:00:00:000%20UTC-00:00"
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
 RECIPIENTS = ["quietcod@protonmail.com", "raghu@thesunrisecomputers.com"]
 
-# File to store seen CVEs for deduplication
+# File to store seen entries for deduplication
 SEEN_FILE = "seen_cves.json"
 
 def load_seen():
@@ -43,29 +43,34 @@ def send_email(subject, body, recipients):
         print(f"Error sending email: {e}")
 
 def main():
-    print("Fetching latest CVE feed...")
-    feed = feedparser.parse(NVD_RSS_URL)
-
-    if not feed.entries:
-        print("Error: Failed to fetch CVE data. Check network or NVD feed URL.")
+    print("Fetching latest CVE data from NVD API...")
+    response = requests.get(NVD_API_URL)
+    if response.status_code != 200:
+        print("Error: Failed to fetch CVE data. Check network or NVD API service.")
         return
 
+    data = response.json()
+    cve_items = data.get("vulnerabilities", [])
     seen = load_seen()
     new_entries = []
 
-    for entry in feed.entries:
-        cve_id = entry.title.strip()
+    for item in cve_items:
+        cve_id = item["cve"]["id"].strip()
         if cve_id not in seen:
-            new_entries.append(entry)
+            new_entries.append(item)
             seen.add(cve_id)
 
     if new_entries:
         print(f"Found {len(new_entries)} new CVE(s). Sending alerts...")
-        for entry in new_entries:
-            subject = f"New CVE Published: {entry.title}"
-            body = f"{entry.title}\n\n{entry.summary}\n\nLink: {entry.link}"
+        for item in new_entries:
+            cve = item["cve"]
+            cve_id = cve["id"]
+            description = cve.get("descriptions", [{}])[0].get("value", "No summary provided.")
+            url = f"https://nvd.nist.gov/vuln/detail/{cve_id}"
+            subject = f"New CVE Published: {cve_id}"
+            body = f"{cve_id}\n\n{description}\n\nLink: {url}"
             send_email(subject, body, RECIPIENTS)
-            print(f"Sent alert for {entry.title}")
+            print(f"Sent alert for {cve_id}")
         save_seen(seen)
         print("Updated seen_cves.json file.")
     else:
