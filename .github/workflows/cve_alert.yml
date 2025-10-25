@@ -1,8 +1,8 @@
-name: CVE Email Alerts
+name: CVE Email Alerts (OSV.dev)
 
 on:
   schedule:
-    - cron: '0 */12 * * *'  # Every 12 hour
+    - cron: '0 */12 * * *'  # Every 6 hours (more frequent for real-time alerts)
 
 jobs:
   send-cve-alerts:
@@ -17,10 +17,18 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install feedparser
+        run: pip install -r requirements.txt
 
-      - name: Run alert script
+      - name: Run CVE alert script
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-        run: python cve.py
+        run: python cve_osv.py
+
+      - name: Commit and push updated CVEs
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add seen_cves.json
+          git commit -m "Update seen_cves.json - $(date +'%Y-%m-%d %H:%M:%S')" || true
+          git push
