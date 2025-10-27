@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '0 */12 * * *'  # Every 6 hours (more frequent for real-time alerts)
 
+permissions:
+  contents: write
+
 jobs:
   send-cve-alerts:
     runs-on: ubuntu-latest
@@ -24,11 +27,15 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: python cve_osv.py
+      
+      - name: Commit and push updated CVEs
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
       - name: Commit and push updated CVEs
         run: |
-          git config --local user.email "action@github.com"
+           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add seen_cves.json
-          git commit -m "Update seen_cves.json - $(date +'%Y-%m-%d %H:%M:%S')" || true
-          git push
+          git commit -m "Update seen_cves.json - $(date -u '+%Y-%m-%d %H:%M:%S')" || exit 0
+          git push "https://x-access-token:${GH_TOKEN}@github.com/quietcod/CVE.git" HEAD:main
