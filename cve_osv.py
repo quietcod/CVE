@@ -23,12 +23,6 @@ OSV_API_URL = "https://api.osv.dev/v1/query"
 CIRCL_API_URL = "https://cve.circl.lu/api/last"
 NVD_BASE_URL = "https://nvd.nist.gov/feeds/json/cve/1.1/"
 
-# Timeout configurations
-DEFAULT_TIMEOUT = 30  # seconds
-API_TIMEOUT = 15      # seconds for API calls
-SCRAPE_TIMEOUT = 20   # seconds for web scraping
-NVD_TIMEOUT = 60      # seconds for large NVD downloads
-
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
 RECIPIENTS = ["quietcod@protonmail.com"]
@@ -64,7 +58,7 @@ def fetch_osv_cves():
             "page_token": None,
             "page_size": 100
         }
-        response = requests.post(OSV_API_URL, json=payload, timeout=API_TIMEOUT)
+        response = requests.post(OSV_API_URL, json=payload, timeout=15)
         response.raise_for_status()
         data = response.json()
         vulns = data.get("vulns", [])
@@ -99,9 +93,6 @@ def fetch_osv_cves():
                 "url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve_id}"
             }
         return cves
-    except requests.exceptions.Timeout:
-        logger.error(f"Timeout error fetching from OSV.dev (timeout: {API_TIMEOUT}s)")
-        return {}
     except Exception as e:
         logger.error(f"Error fetching from OSV.dev: {e}")
         return {}
@@ -110,7 +101,7 @@ def fetch_circl_cves():
     logger.info("Fetching CVEs from CIRCL API...")
     cves = {}
     try:
-        response = requests.get(CIRCL_API_URL, timeout=API_TIMEOUT)
+        response = requests.get(CIRCL_API_URL, timeout=15)
         response.raise_for_status()
         data = response.json()
         logger.info(f"Retrieved {len(data)} CVEs from CIRCL")
@@ -135,9 +126,6 @@ def fetch_circl_cves():
                 "url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve_id}"
             }
         return cves
-    except requests.exceptions.Timeout:
-        logger.error(f"Timeout error fetching from CIRCL (timeout: {API_TIMEOUT}s)")
-        return {}
     except Exception as e:
         logger.error(f"Error fetching from CIRCL: {e}")
         return {}
@@ -146,11 +134,10 @@ def fetch_nvd_cves():
     logger.info("Downloading latest NVD modified feed...")
     feed_url = NVD_BASE_URL + "nvdcve-1.1-modified.json.gz"
     try:
-        resp = requests.get(feed_url, timeout=NVD_TIMEOUT)
+        resp = requests.get(feed_url, timeout=60)
         resp.raise_for_status()
         gz = gzip.GzipFile(fileobj=io.BytesIO(resp.content))
         data = json.load(gz)
-
         cves = {}
         for item in data.get("CVE_Items", []):
             cve_id = item.get("cve", {}).get("CVE_data_meta", {}).get("ID", "")
@@ -170,9 +157,6 @@ def fetch_nvd_cves():
             }
         logger.info(f"Extracted {len(cves)} CVEs from NVD feed")
         return cves
-    except requests.exceptions.Timeout:
-        logger.error(f"Timeout error downloading NVD feed (timeout: {NVD_TIMEOUT}s)")
-        return {}
     except Exception as e:
         logger.error(f"Error downloading/parsing NVD feed: {e}")
         return {}
@@ -189,15 +173,12 @@ def scrape_cve_org_details(cve_id):
     logger.info(f"Scraping CVE.org for details of {cve_id}")
     url = f"https://www.cve.org/CVERecord?id={cve_id}"
     try:
-        resp = requests.get(url, timeout=SCRAPE_TIMEOUT)
+        resp = requests.get(url, timeout=20)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         desc_div = soup.find("div", class_="card-text")
         description = desc_div.text.strip() if desc_div else "Description not found."
         return description
-    except requests.exceptions.Timeout:
-        logger.error(f"Timeout error scraping CVE.org for {cve_id} (timeout: {SCRAPE_TIMEOUT}s)")
-        return None
     except Exception as e:
         logger.error(f"Failed to scrape CVE.org for {cve_id}: {e}")
         return None
@@ -208,7 +189,7 @@ def patch_missing_with_scrape(cves):
             description = scrape_cve_org_details(cveid)
             if description:
                 cvedata["summary"] = description
-                time.sleep(10)  # Polite delay between scrapes
+                time.sleep(10)  # polite delay between scrapes
     return cves
 
 def send_summary_email(new_cves, recipients):
@@ -267,6 +248,7 @@ def main():
         logger.info("CVE Alert System Completed Successfully")
     except Exception as e:
         logger.error(f"Fatal error in main: {e}", exc_info=True)
+
 
 if __name__ == "__main__":
     main()
