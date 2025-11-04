@@ -4,6 +4,8 @@ import json
 import os
 import logging
 import time
+import gzip
+import io
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -16,8 +18,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Constants
 OSV_API_URL = "https://api.osv.dev/v1/query"
 CIRCL_API_URL = "https://cve.circl.lu/api/last"
+NVD_BASE_URL = "https://nvd.nist.gov/feeds/json/cve/1.1/"
+
+# Timeout configurations
+DEFAULT_TIMEOUT = 30  # seconds
+API_TIMEOUT = 15      # seconds for API calls
+SCRAPE_TIMEOUT = 20   # seconds for web scraping
+NVD_TIMEOUT = 60      # seconds for large NVD downloads
 
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
@@ -54,7 +64,7 @@ def fetch_osv_cves():
             "page_token": None,
             "page_size": 100
         }
-        response = requests.post(OSV_API_URL, json=payload, timeout=15)
+        response = requests.post(OSV_API_URL, json=payload, timeout=API_TIMEOUT)
         response.raise_for_status()
         data = response.json()
         vulns = data.get("vulns", [])
@@ -88,8 +98,10 @@ def fetch_osv_cves():
                 "source": "OSV.dev",
                 "url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve_id}"
             }
-        logger.info(f"Successfully fetched {len(cves)} CVEs from OSV.dev")
         return cves
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout error fetching from OSV.dev (timeout: {API_TIMEOUT}s)")
+        return {}
     except Exception as e:
         logger.error(f"Error fetching from OSV.dev: {e}")
         return {}
@@ -98,7 +110,7 @@ def fetch_circl_cves():
     logger.info("Fetching CVEs from CIRCL API...")
     cves = {}
     try:
-        response = requests.get(CIRCL_API_URL, timeout=10)
+        response = requests.get(CIRCL_API_URL, timeout=API_TIMEOUT)
         response.raise_for_status()
         data = response.json()
         logger.info(f"Retrieved {len(data)} CVEs from CIRCL")
@@ -122,52 +134,81 @@ def fetch_circl_cves():
                 "source": "CIRCL",
                 "url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve_id}"
             }
-        logger.info(f"Successfully fetched {len(cves)} CVEs from CIRCL")
         return cves
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout error fetching from CIRCL (timeout: {API_TIMEOUT}s)")
+        return {}
     except Exception as e:
         logger.error(f"Error fetching from CIRCL: {e}")
         return {}
 
-def merge_cves(osv_cves, circl_cves):
+def fetch_nvd_cves():
+    logger.info("Downloading latest NVD modified feed...")
+    feed_url = NVD_BASE_URL + "nvdcve-1.1-modified.json.gz"
+    try:
+        resp = requests.get(feed_url, timeout=NVD_TIMEOUT)
+        resp.raise_for_status()
+        gz = gzip.GzipFile(fileobj=io.BytesIO(resp.content))
+        data = json.load(gz)
+
+        cves = {}
+        for item in data.get("CVE_Items", []):
+            cve_id = item.get("cve", {}).get("CVE_data_meta", {}).get("ID", "")
+            if not cve_id.startswith("CVE-"):
+                continue
+            description_data = item.get("cve", {}).get("description", {}).get("description_data", [])
+            description = description_data[0]["value"] if description_data else "No description available"
+            impact = item.get("impact", {})
+            cvss_score = "N/A"
+            if "baseMetricV3" in impact:
+                cvss_score = str(impact["baseMetricV3"].get("cvssV3", {}).get("baseScore", "N/A"))
+            cves[cve_id] = {
+                "summary": description,
+                "cvss_score": cvss_score,
+                "url": f"https://nvd.nist.gov/vuln/detail/{cve_id}",
+                "source": "NVD"
+            }
+        logger.info(f"Extracted {len(cves)} CVEs from NVD feed")
+        return cves
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout error downloading NVD feed (timeout: {NVD_TIMEOUT}s)")
+        return {}
+    except Exception as e:
+        logger.error(f"Error downloading/parsing NVD feed: {e}")
+        return {}
+
+def merge_cves(osv_cves, circl_cves, nvd_cves):
     all_cves = {}
     all_cves.update(circl_cves)
+    all_cves.update(nvd_cves)
     all_cves.update(osv_cves)
     logger.info(f"Merged CVEs: {len(all_cves)} unique vulnerabilities")
     return all_cves
 
-def scrape_cve_details(cve_id):
-    logger.info(f"Scraping CVE details for {cve_id}")
-    url = f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve_id}"
+def scrape_cve_org_details(cve_id):
+    logger.info(f"Scraping CVE.org for details of {cve_id}")
+    url = f"https://www.cve.org/CVERecord?id={cve_id}"
     try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-        desc_tag = soup.find("td", {"data-testid": "vuln-description"})
-        if not desc_tag:
-            # Try alternate element/class common on MITRE page
-            desc_tag = soup.find("td", {"valign": "top"})
-        description = desc_tag.text.strip() if desc_tag else "Description not found."
-        # MITRE CVE pages don't have CVSS scores so keep as 'N/A'
-        return description, "N/A"
+        resp = requests.get(url, timeout=SCRAPE_TIMEOUT)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        desc_div = soup.find("div", class_="card-text")
+        description = desc_div.text.strip() if desc_div else "Description not found."
+        return description
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout error scraping CVE.org for {cve_id} (timeout: {SCRAPE_TIMEOUT}s)")
+        return None
     except Exception as e:
-        logger.error(f"Failed to scrape {cve_id}: {str(e)}")
-        return None, None
+        logger.error(f"Failed to scrape CVE.org for {cve_id}: {e}")
+        return None
 
-def patch_missing_cve_details(cves):
-    time.sleep(30)  # Initial delay
-    patched_count = 0
+def patch_missing_with_scrape(cves):
     for cveid, cvedata in cves.items():
-        if patched_count >= 5:
-            break
-        if cvedata.get("summary", "") in ("", "Check CIRCL database for details") or cvedata.get("cvss_score", "N/A") == "N/A":
-            desc, cvss = scrape_cve_details(cveid)
-            if desc:
-                if cvedata.get("summary", "") in ("", "Check CIRCL database for details"):
-                    cvedata["summary"] = desc
-                if cvedata.get("cvss_score", "N/A") == "N/A":
-                    cvedata["cvss_score"] = cvss
-                patched_count += 1
-                time.sleep(10)  # Delay between requests
+        if cvedata.get("summary", "").startswith("Check CIRCL database") or not cvedata.get("summary"):
+            description = scrape_cve_org_details(cveid)
+            if description:
+                cvedata["summary"] = description
+                time.sleep(10)  # Polite delay between scrapes
     return cves
 
 def send_summary_email(new_cves, recipients):
@@ -199,7 +240,7 @@ def send_summary_email(new_cves, recipients):
         return False
 
 def main():
-    logger.info("CVE Alert System Started (OSV.dev Enhanced)")
+    logger.info("CVE Alert System Started")
     try:
         if not EMAIL_USER or not EMAIL_PASS:
             logger.error("EMAIL_USER or EMAIL_PASS not set in environment variables")
@@ -208,7 +249,8 @@ def main():
         logger.info(f"Loaded {len(seen_cves)} previously seen CVEs")
         osv_cves = fetch_osv_cves()
         circl_cves = fetch_circl_cves()
-        all_cves = merge_cves(osv_cves, circl_cves)
+        nvd_cves = fetch_nvd_cves()
+        all_cves = merge_cves(osv_cves, circl_cves, nvd_cves)
         if not all_cves:
             logger.warning("No CVEs fetched from any source")
             return
@@ -216,8 +258,7 @@ def main():
         if new_cve_ids:
             logger.info(f"Found {len(new_cve_ids)} new CVEs")
             new_cves_data = {cveid: all_cves[cveid] for cveid in sorted(new_cve_ids)}
-            # Patch missing details with scraping
-            patched_cves = patch_missing_cve_details(new_cves_data)
+            patched_cves = patch_missing_with_scrape(new_cves_data)
             send_summary_email(patched_cves, RECIPIENTS)
             seen_cves.update(new_cve_ids)
             save_seen(seen_cves)
