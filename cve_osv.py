@@ -9,7 +9,12 @@ import io
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from bs4 import BeautifulSoup
+
+# Selenium imports for dynamic scraping
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
 # Configure logging
 logging.basicConfig(
@@ -28,6 +33,7 @@ EMAIL_PASS = os.getenv("EMAIL_PASS")
 RECIPIENTS = ["quietcod@protonmail.com"]
 SEEN_FILE = "seen_cves.json"
 
+
 def load_seen():
     if os.path.exists(SEEN_FILE):
         try:
@@ -42,6 +48,7 @@ def load_seen():
             logger.warning(f"Error loading seen CVEs: {e}")
     return set()
 
+
 def save_seen(cve_set):
     try:
         with open(SEEN_FILE, "w") as f:
@@ -49,6 +56,7 @@ def save_seen(cve_set):
         logger.info(f"Saved {len(cve_set)} CVEs to seen_cves.json")
     except Exception as e:
         logger.error(f"Error saving seen CVEs: {e}")
+
 
 def fetch_osv_cves():
     logger.info("Fetching CVEs from OSV.dev API...")
@@ -97,6 +105,7 @@ def fetch_osv_cves():
         logger.error(f"Error fetching from OSV.dev: {e}")
         return {}
 
+
 def fetch_circl_cves():
     logger.info("Fetching CVEs from CIRCL API...")
     cves = {}
@@ -130,6 +139,7 @@ def fetch_circl_cves():
         logger.error(f"Error fetching from CIRCL: {e}")
         return {}
 
+
 def fetch_nvd_cves():
     logger.info("Downloading latest NVD modified feed...")
     feed_url = NVD_BASE_URL + "nvdcve-1.1-modified.json.gz"
@@ -161,6 +171,7 @@ def fetch_nvd_cves():
         logger.error(f"Error downloading/parsing NVD feed: {e}")
         return {}
 
+
 def merge_cves(osv_cves, circl_cves, nvd_cves):
     all_cves = {}
     all_cves.update(circl_cves)
@@ -169,28 +180,47 @@ def merge_cves(osv_cves, circl_cves, nvd_cves):
     logger.info(f"Merged CVEs: {len(all_cves)} unique vulnerabilities")
     return all_cves
 
-def scrape_cve_org_details(cve_id):
-    logger.info(f"Scraping CVE.org for details of {cve_id}")
+
+def scrape_cve_org_details_selenium(cve_id):
+    logger.info(f"Scraping CVE.org for details of {cve_id} using Selenium")
     url = f"https://www.cve.org/CVERecord?id={cve_id}"
+    options = Options()
+    options.headless = True
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
     try:
-        resp = requests.get(url, timeout=20)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        desc_div = soup.find("div", class_="card-text")
-        description = desc_div.text.strip() if desc_div else "Description not found."
-        return description
+        time.sleep(5)  # Wait for JS content to load
+        desc_div = driver.find_element(By.ID, "cve-description")
+        children = desc_div.find_elements(By.XPATH, "./*")
+        desc_lines = []
+        for el in children:
+            if el.tag_name.lower() == 'h4':
+                continue
+            desc_lines.append(el.text.strip())
+        description = "\n".join(desc_lines).strip()
+        if description:
+            return description
+        else:
+            return "Description not found."
     except Exception as e:
-        logger.error(f"Failed to scrape CVE.org for {cve_id}: {e}")
-        return None
+        logger.error(f"Error scraping {cve_id} with Selenium: {e}")
+        return "Scraping error."
+    finally:
+        driver.quit()
+
 
 def patch_missing_with_scrape(cves):
     for cveid, cvedata in cves.items():
         if cvedata.get("summary", "").startswith("Check CIRCL database") or not cvedata.get("summary"):
-            description = scrape_cve_org_details(cveid)
+            description = scrape_cve_org_details_selenium(cveid)
             if description:
                 cvedata["summary"] = description
                 time.sleep(10)  # polite delay between scrapes
     return cves
+
 
 def send_summary_email(new_cves, recipients):
     subject = f"New CVE Alerts - {len(new_cves)} vulnerabilities found"
@@ -219,6 +249,7 @@ def send_summary_email(new_cves, recipients):
     except Exception as e:
         logger.error(f"Error sending summary email: {e}")
         return False
+
 
 def main():
     logger.info("CVE Alert System Started")
