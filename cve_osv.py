@@ -23,6 +23,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Timeout and delay configurations
+DEFAULT_TIMEOUT = 30    # seconds, for general requests
+API_TIMEOUT = 15        # seconds, for API calls
+SCRAPE_TIMEOUT = 20     # seconds, for web scraping page loads
+NVD_TIMEOUT = 60        # seconds, for large NVD downloads
+SCRAPE_POLITE_DELAY = 10  # seconds, between Selenium scrapes of CVE.org (politeness)
+
 # Constants
 OSV_API_URL = "https://api.osv.dev/v1/query"
 CIRCL_API_URL = "https://cve.circl.lu/api/last"
@@ -32,7 +39,6 @@ EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
 RECIPIENTS = ["quietcod@protonmail.com"]
 SEEN_FILE = "seen_cves.json"
-
 
 def load_seen():
     if os.path.exists(SEEN_FILE):
@@ -48,7 +54,6 @@ def load_seen():
             logger.warning(f"Error loading seen CVEs: {e}")
     return set()
 
-
 def save_seen(cve_set):
     try:
         with open(SEEN_FILE, "w") as f:
@@ -56,7 +61,6 @@ def save_seen(cve_set):
         logger.info(f"Saved {len(cve_set)} CVEs to seen_cves.json")
     except Exception as e:
         logger.error(f"Error saving seen CVEs: {e}")
-
 
 def fetch_osv_cves():
     logger.info("Fetching CVEs from OSV.dev API...")
@@ -66,7 +70,7 @@ def fetch_osv_cves():
             "page_token": None,
             "page_size": 100
         }
-        response = requests.post(OSV_API_URL, json=payload, timeout=15)
+        response = requests.post(OSV_API_URL, json=payload, timeout=API_TIMEOUT)
         response.raise_for_status()
         data = response.json()
         vulns = data.get("vulns", [])
@@ -105,12 +109,11 @@ def fetch_osv_cves():
         logger.error(f"Error fetching from OSV.dev: {e}")
         return {}
 
-
 def fetch_circl_cves():
     logger.info("Fetching CVEs from CIRCL API...")
     cves = {}
     try:
-        response = requests.get(CIRCL_API_URL, timeout=15)
+        response = requests.get(CIRCL_API_URL, timeout=API_TIMEOUT)
         response.raise_for_status()
         data = response.json()
         logger.info(f"Retrieved {len(data)} CVEs from CIRCL")
@@ -139,12 +142,11 @@ def fetch_circl_cves():
         logger.error(f"Error fetching from CIRCL: {e}")
         return {}
 
-
 def fetch_nvd_cves():
     logger.info("Downloading latest NVD modified feed...")
     feed_url = NVD_BASE_URL + "nvdcve-1.1-modified.json.gz"
     try:
-        resp = requests.get(feed_url, timeout=60)
+        resp = requests.get(feed_url, timeout=NVD_TIMEOUT)
         resp.raise_for_status()
         gz = gzip.GzipFile(fileobj=io.BytesIO(resp.content))
         data = json.load(gz)
@@ -171,7 +173,6 @@ def fetch_nvd_cves():
         logger.error(f"Error downloading/parsing NVD feed: {e}")
         return {}
 
-
 def merge_cves(osv_cves, circl_cves, nvd_cves):
     all_cves = {}
     all_cves.update(circl_cves)
@@ -180,9 +181,8 @@ def merge_cves(osv_cves, circl_cves, nvd_cves):
     logger.info(f"Merged CVEs: {len(all_cves)} unique vulnerabilities")
     return all_cves
 
-
-def scrape_cve_org_details_selenium(cve_id):
-    logger.info(f"Scraping CVE.org for details of {cve_id} using Selenium")
+def scrape_cve_org_details_and_cvss_selenium(cve_id):
+    logger.info(f"Scraping CVE.org for details and CVSS of {cve_id} using Selenium")
     url = f"https://www.cve.org/CVERecord?id={cve_id}"
     options = Options()
     options.headless = True
@@ -190,6 +190,7 @@ def scrape_cve_org_details_selenium(cve_id):
     options.add_argument("--disable-dev-shm-usage")
 
     driver = webdriver.Chrome(options=options)
+    driver.set_page_load_timeout(SCRAPE_TIMEOUT)
     driver.get(url)
     try:
         time.sleep(5)  # Wait for JS content to load
@@ -201,26 +202,30 @@ def scrape_cve_org_details_selenium(cve_id):
                 continue
             desc_lines.append(el.text.strip())
         description = "\n".join(desc_lines).strip()
-        if description:
-            return description
-        else:
-            return "Description not found."
+        try:
+            score_td = driver.find_element(By.XPATH, '//td[@data-label="Score"]')
+            cvss_score = score_td.text.strip()
+        except NoSuchElementException:
+            cvss_score = "N/A"
+        return description if description else "Description not found.", cvss_score
     except Exception as e:
         logger.error(f"Error scraping {cve_id} with Selenium: {e}")
-        return "Scraping error."
+        return "Scraping error.", "N/A"
     finally:
         driver.quit()
 
-
 def patch_missing_with_scrape(cves):
     for cveid, cvedata in cves.items():
-        if cvedata.get("summary", "").startswith("Check CIRCL database") or not cvedata.get("summary"):
-            description = scrape_cve_org_details_selenium(cveid)
-            if description:
+        needs_summary = cvedata.get("summary", "").startswith("Check CIRCL database") or not cvedata.get("summary")
+        needs_cvss = cvedata.get("cvss_score", "N/A") == "N/A"
+        if needs_summary or needs_cvss:
+            description, cvss = scrape_cve_org_details_and_cvss_selenium(cveid)
+            if needs_summary and description:
                 cvedata["summary"] = description
-                time.sleep(10)  # polite delay between scrapes
+            if needs_cvss and cvss:
+                cvedata["cvss_score"] = cvss
+            time.sleep(SCRAPE_POLITE_DELAY)  # Polite delay between Selenium scrapes
     return cves
-
 
 def send_summary_email(new_cves, recipients):
     subject = f"New CVE Alerts - {len(new_cves)} vulnerabilities found"
@@ -250,7 +255,6 @@ def send_summary_email(new_cves, recipients):
         logger.error(f"Error sending summary email: {e}")
         return False
 
-
 def main():
     logger.info("CVE Alert System Started")
     try:
@@ -279,7 +283,6 @@ def main():
         logger.info("CVE Alert System Completed Successfully")
     except Exception as e:
         logger.error(f"Fatal error in main: {e}", exc_info=True)
-
 
 if __name__ == "__main__":
     main()
