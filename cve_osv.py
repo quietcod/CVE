@@ -27,13 +27,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 30    # seconds, for general requests
 API_TIMEOUT = 15        # seconds, for API calls
 SCRAPE_TIMEOUT = 20     # seconds, for web scraping page loads
-NVD_TIMEOUT = 60        # seconds, for large NVD downloads
+# NVD_TIMEOUT = 60        # seconds, for large NVD downloads
 SCRAPE_POLITE_DELAY = 10  # seconds, between Selenium scrapes of CVE.org (politeness)
 
 # Constants
 OSV_API_URL = "https://api.osv.dev/v1/query"
 CIRCL_API_URL = "https://cve.circl.lu/api/last"
-NVD_BASE_URL = "https://nvd.nist.gov/feeds/json/cve/1.1/"
+# NVD_BASE_URL = "https://nvd.nist.gov/feeds/json/cve/1.1/"
 
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
@@ -142,41 +142,41 @@ def fetch_circl_cves():
         logger.error(f"Error fetching from CIRCL: {e}")
         return {}
 
-def fetch_nvd_cves():
-    logger.info("Downloading latest NVD modified feed...")
-    feed_url = NVD_BASE_URL + "nvdcve-1.1-modified.json.gz"
-    try:
-        resp = requests.get(feed_url, timeout=NVD_TIMEOUT)
-        resp.raise_for_status()
-        gz = gzip.GzipFile(fileobj=io.BytesIO(resp.content))
-        data = json.load(gz)
-        cves = {}
-        for item in data.get("CVE_Items", []):
-            cve_id = item.get("cve", {}).get("CVE_data_meta", {}).get("ID", "")
-            if not cve_id.startswith("CVE-"):
-                continue
-            description_data = item.get("cve", {}).get("description", {}).get("description_data", [])
-            description = description_data[0]["value"] if description_data else "No description available"
-            impact = item.get("impact", {})
-            cvss_score = "N/A"
-            if "baseMetricV3" in impact:
-                cvss_score = str(impact["baseMetricV3"].get("cvssV3", {}).get("baseScore", "N/A"))
-            cves[cve_id] = {
-                "summary": description,
-                "cvss_score": cvss_score,
-                "url": f"https://nvd.nist.gov/vuln/detail/{cve_id}",
-                "source": "NVD"
-            }
-        logger.info(f"Extracted {len(cves)} CVEs from NVD feed")
-        return cves
-    except Exception as e:
-        logger.error(f"Error downloading/parsing NVD feed: {e}")
-        return {}
+# def fetch_nvd_cves():
+#     logger.info("Downloading latest NVD modified feed...")
+#     feed_url = NVD_BASE_URL + "nvdcve-1.1-modified.json.gz"
+#     try:
+#         resp = requests.get(feed_url, timeout=NVD_TIMEOUT)
+#         resp.raise_for_status()
+#         gz = gzip.GzipFile(fileobj=io.BytesIO(resp.content))
+#         data = json.load(gz)
+#         cves = {}
+#         for item in data.get("CVE_Items", []):
+#             cve_id = item.get("cve", {}).get("CVE_data_meta", {}).get("ID", "")
+#             if not cve_id.startswith("CVE-"):
+#                 continue
+#             description_data = item.get("cve", {}).get("description", {}).get("description_data", [])
+#             description = description_data[0]["value"] if description_data else "No description available"
+#             impact = item.get("impact", {})
+#             cvss_score = "N/A"
+#             if "baseMetricV3" in impact:
+#                 cvss_score = str(impact["baseMetricV3"].get("cvssV3", {}).get("baseScore", "N/A"))
+#             cves[cve_id] = {
+#                 "summary": description,
+#                 "cvss_score": cvss_score,
+#                 "url": f"https://nvd.nist.gov/vuln/detail/{cve_id}",
+#                 "source": "NVD"
+#             }
+#         logger.info(f"Extracted {len(cves)} CVEs from NVD feed")
+#         return cves
+#     except Exception as e:
+#         logger.error(f"Error downloading/parsing NVD feed: {e}")
+#         return {}
 
-def merge_cves(osv_cves, circl_cves, nvd_cves):
+def merge_cves(osv_cves, circl_cves):
     all_cves = {}
     all_cves.update(circl_cves)
-    all_cves.update(nvd_cves)
+    # all_cves.update(nvd_cves)
     all_cves.update(osv_cves)
     logger.info(f"Merged CVEs: {len(all_cves)} unique vulnerabilities")
     return all_cves
@@ -265,8 +265,8 @@ def main():
         logger.info(f"Loaded {len(seen_cves)} previously seen CVEs")
         osv_cves = fetch_osv_cves()
         circl_cves = fetch_circl_cves()
-        nvd_cves = fetch_nvd_cves()
-        all_cves = merge_cves(osv_cves, circl_cves, nvd_cves)
+        # nvd_cves = fetch_nvd_cves()
+        all_cves = merge_cves(osv_cves, circl_cves)
         if not all_cves:
             logger.warning("No CVEs fetched from any source")
             return
@@ -286,3 +286,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
