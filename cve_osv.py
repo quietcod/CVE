@@ -68,11 +68,7 @@ def fetch_osv_cves():
     logger.info("Fetching CVEs from OSV.dev API...")
     cves = {}
     try:
-        payload = {
-            "page_token": None,
-            "page_size": 100
-        }
-        response = requests.post(OSV_API_URL, json=payload, timeout=API_TIMEOUT)
+        response = requests.get("https://api.osv.dev/v1/vulns?limit=100", timeout=15)
         response.raise_for_status()
         data = response.json()
         vulns = data.get("vulns", [])
@@ -110,6 +106,7 @@ def fetch_osv_cves():
     except Exception as e:
         logger.error(f"Error fetching from OSV.dev: {e}")
         return {}
+
 
 def fetch_circl_cves():
     logger.info("Fetching CVEs from CIRCL API...")
@@ -288,5 +285,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
