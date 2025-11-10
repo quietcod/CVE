@@ -19,6 +19,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y chromium-browser chromium-chromedriver
           sudo ln -s /usr/bin/chromedriver /usr/local/bin/chromedriver
+          sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
 
       - name: Set up Python
         uses: actions/setup-python@v5
