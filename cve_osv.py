@@ -91,7 +91,7 @@ def scrape_cve_details_selenium(cve_id):
     options.headless = True
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.binary_location = "/usr/bin/chromium-browser"
+    # options.binary_location = "/usr/bin/chromium-browser"
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     driver.set_page_load_timeout(SCRAPE_TIMEOUT)
     description, cvss_score = "", "N/A"
@@ -204,4 +204,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
