@@ -87,14 +87,14 @@ def scrape_cve_details_selenium(cve_id):
     
     # Try CVE.org first
    def scrape_cve_details_selenium(cve_id):
-    logger.info(f"Scraping CVE.org and Mitre for {cve_id} using Selenium")
-    url_org = f"https://www.cve.org/CVERecord?id={cve_id}"
-    options = Options()
-    options.headless = True
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-software-rasterizer")
+       logger.info(f"Scraping CVE.org and Mitre for {cve_id} using Selenium")
+       url_org = f"https://www.cve.org/CVERecord?id={cve_id}"
+       options = Options()
+       options.headless = True
+       options.add_argument("--no-sandbox")
+       options.add_argument("--disable-dev-shm-usage")
+       options.add_argument("--disable-gpu")
+       options.add_argument("--disable-software-rasterizer")
 
     service = Service(ChromeDriverManager().install(), log_path="chromedriver.log", verbose=True)
     driver = webdriver.Chrome(service=service, options=options)
@@ -209,6 +209,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
