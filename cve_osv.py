@@ -96,10 +96,10 @@ def scrape_cve_details_selenium(cve_id):
        options.add_argument("--disable-gpu")
        options.add_argument("--disable-software-rasterizer")
 
-    service = Service(ChromeDriverManager().install(), log_path="chromedriver.log", verbose=True)
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.set_page_load_timeout(SCRAPE_TIMEOUT)
-    description, cvss_score = "", "N/A"
+       service = Service(ChromeDriverManager().install(), log_path="chromedriver.log", verbose=True)
+       driver = webdriver.Chrome(service=service, options=options)
+       driver.set_page_load_timeout(SCRAPE_TIMEOUT)
+       description, cvss_score = "", "N/A"
 
     try:
         driver.get(url_org)
@@ -209,6 +209,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
