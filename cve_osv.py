@@ -102,13 +102,16 @@ def get_chrome_driver():
     options.add_argument("--disable-renderer-backgrounding")
     options.add_argument("--disable-features=TranslateUI,VizDisplayCompositor")
     options.add_argument("--window-size=1280,720")
-    options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
+    options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-plugins")
-    options.add_argument("--disable-images")
-    options.add_argument("--disable-javascript")
     options.add_argument("--no-first-run")
     options.add_argument("--disable-default-apps")
+    
+    # Better modern website compatibility
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
     
     try:
         service = Service()
@@ -122,7 +125,7 @@ def get_chrome_driver():
         logger.info("Using webdriver-manager ChromeDriver")
     
     driver.set_page_load_timeout(SCRAPE_TIMEOUT)
-    driver.implicitly_wait(3)
+    driver.implicitly_wait(5)
     return driver
 
 def scrape_cve_details_selenium(cve_id):
@@ -136,66 +139,107 @@ def scrape_cve_details_selenium(cve_id):
         try:
             driver = get_chrome_driver()
             
-            # Try MITRE first
-            mitre_url = f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve_id}"
-            logger.info(f"Loading MITRE page: {mitre_url} (attempt {attempt + 1})")
+            # Try CVE.org first (modern structure)
+            cve_org_url = f"https://www.cve.org/CVERecord?id={cve_id}"
+            logger.info(f"Loading CVE.org page: {cve_org_url} (attempt {attempt + 1})")
             
-            driver.get(mitre_url)
-            time.sleep(2)
+            driver.get(cve_org_url)
+            time.sleep(5)  # Wait for JavaScript to load
             
-            description_selectors = [
-                '//table[@id="TableWithBorder"]//td[contains(text(),"Description")]/following-sibling::td',
-                '//table//tr[td[contains(text(),"Description")]]/td[2]'
+            # CVE.org description selectors
+            cve_org_selectors = [
+                '//p[@class="content cve-x-scroll"]',
+                '//div[@id="cve-description"]//p[@class="content cve-x-scroll"]',
+                '//div[@id="cve-description"]//p',
+                '//div[contains(@class,"cve-description")]//p',
+                '//p[contains(@class,"content")]',
+                '//div[@id="cve-cna-container-start"]//p[@class="content cve-x-scroll"]',
+                '//div[@class="content"]//p[@class="content cve-x-scroll"]'
             ]
             
-            for selector in description_selectors:
+            for i, selector in enumerate(cve_org_selectors):
                 try:
+                    logger.info(f"Trying CVE.org description selector {i+1}: {selector}")
                     desc_elem = driver.find_element(By.XPATH, selector)
                     if desc_elem and desc_elem.text.strip():
                         description = desc_elem.text.strip()
-                        logger.info(f"Found description using selector: {selector}")
+                        logger.info(f"✅ Found description using CVE.org selector {i+1}")
                         break
                 except NoSuchElementException:
+                    logger.info(f"❌ CVE.org description selector {i+1} failed")
                     continue
             
+            # CVE.org CVSS selectors
+            cvss_selectors_cve_org = [
+                '//td[@data-label="Score"]',
+                '//td[contains(@data-label,"Score")]',
+                '//table[contains(@class,"table-container")]//td[@data-label="Score"]',
+                '//div[@id="cvss-table"]//td[@data-label="Score"]',
+                '//td[@data-label="Severity"]',
+                '//td[contains(@data-label,"CVSS")]',
+                '//div[contains(@class,"cvss")]//span',
+                '//div[@id="cve-cna-container-start"]//div[contains(@class,"score")]',
+                '//*[contains(text(),"CVSS")]/following-sibling::*',
+                '//span[contains(@class,"score")]'
+            ]
+            
+            for i, selector in enumerate(cvss_selectors_cve_org):
+                try:
+                    logger.info(f"Trying CVE.org CVSS selector {i+1}: {selector}")
+                    cvss_elem = driver.find_element(By.XPATH, selector)
+                    if cvss_elem and cvss_elem.text.strip():
+                        cvss_text = cvss_elem.text.strip()
+                        # Extract numeric score if it contains other text
+                        import re
+                        score_match = re.search(r'(\d+\.?\d*)', cvss_text)
+                        if score_match:
+                            cvss_score = score_match.group(1)
+                        else:
+                            cvss_score = cvss_text
+                        logger.info(f"✅ Found CVSS on CVE.org using selector {i+1}: {cvss_score}")
+                        break
+                except NoSuchElementException:
+                    logger.info(f"❌ CVE.org CVSS selector {i+1} failed")
+                    continue
+            
+            # If found description on CVE.org, break attempt loop
             if description:
                 break
-                
-            # Try NVD if MITRE failed and it's the last attempt
-            if attempt == 1:
-                logger.info(f"Trying NVD for {cve_id}")
-                nvd_url = f"https://nvd.nist.gov/vuln/detail/{cve_id}"
+            
+            # If no description from CVE.org, try MITRE (fallback)
+            if not description:
+                logger.info(f"No description on CVE.org, trying MITRE for {cve_id}")
+                mitre_url = f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve_id}"
                 
                 try:
-                    driver.get(nvd_url)
+                    driver.get(mitre_url)
                     time.sleep(3)
                     
-                    nvd_selectors = [
-                        '//p[@data-testid="vuln-description"]',
-                        '//div[contains(@class,"vuln-description")]//p'
+                    mitre_selectors = [
+                        '//table[@id="TableWithBorder"]//td[contains(text(),"Description")]/following-sibling::td',
+                        '//table[@id="TableWithBorder"]//tr[td[contains(text(),"Description")]]/td[2]',
+                        '//table//td[contains(text(),"Description")]/../td[2]',
+                        '//table//tr[contains(.,"Description")]/td[2]',
+                        '//td[contains(text(),"Description")]/following-sibling::td[1]',
+                        '//table//td[normalize-space(text())="Description"]/following-sibling::td'
                     ]
                     
-                    for selector in nvd_selectors:
+                    for i, selector in enumerate(mitre_selectors):
                         try:
+                            logger.info(f"Trying MITRE selector {i+1}: {selector}")
                             desc_elem = driver.find_element(By.XPATH, selector)
                             if desc_elem and desc_elem.text.strip():
                                 description = desc_elem.text.strip()
-                                logger.info(f"Found description on NVD using: {selector}")
+                                logger.info(f"✅ Found description using MITRE selector {i+1}")
                                 break
                         except NoSuchElementException:
+                            logger.info(f"❌ MITRE selector {i+1} failed")
                             continue
-                    
-                    # Try CVSS score
-                    try:
-                        cvss_elem = driver.find_element(By.XPATH, '//span[@data-testid="vuln-cvss3-base-score"]')
-                        if cvss_elem and cvss_elem.text.strip():
-                            cvss_score = cvss_elem.text.strip()
-                    except NoSuchElementException:
-                        pass
                         
                 except Exception as e:
-                    logger.warning(f"NVD scraping failed for {cve_id}: {e}")
-            break
+                    logger.warning(f"MITRE scraping failed for {cve_id}: {e}")
+            
+            break  # Exit attempt loop
             
         except Exception as e:
             logger.warning(f"Attempt {attempt + 1} failed for {cve_id}: {e}")
@@ -210,7 +254,7 @@ def scrape_cve_details_selenium(cve_id):
                     logger.warning(f"Error closing driver: {e}")
     
     final_description = description if description else "Description not available"
-    logger.info(f"Scraping result for {cve_id}: description_length={len(final_description)}, cvss={cvss_score}")
+    logger.info(f"Final result for {cve_id}: description_length={len(final_description)}, cvss={cvss_score}")
     
     return final_description, cvss_score
 
