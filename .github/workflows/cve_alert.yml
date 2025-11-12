@@ -37,7 +37,7 @@ jobs:
         run: |
           echo "Chrome version: $(google-chrome --version)"
           echo "ChromeDriver available: $(which chromedriver || echo 'Not in PATH')"
-          python cve_osv-v5.py
+          python cve_osv.py
 
       - name: Commit and push updated CVEs
         env:
