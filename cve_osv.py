@@ -64,6 +64,20 @@ def fetch_circl_cves():
         data = response.json()
         logger.info(f"Retrieved {len(data)} CVEs from CIRCL")
         
+        # DEBUG: Print the actual structure
+        logger.info("=== DEBUG: CIRCL API Response Structure ===")
+        logger.info(f"Response type: {type(data)}")
+        logger.info(f"Response length: {len(data)}")
+        
+        if len(data) > 0:
+            logger.info("First 3 items:")
+            for i, item in enumerate(data[:3]):
+                logger.info(f"Item {i+1}: {item}")
+                logger.info(f"Item {i+1} type: {type(item)}")
+                
+        logger.info("=== END DEBUG ===")
+        
+        # Your existing processing logic here...
         cves = {}
         limit = int(os.getenv("CVE_LIMIT", "10"))
         
@@ -84,6 +98,8 @@ def fetch_circl_cves():
                 "source": "CIRCL",
                 "url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve_id}"
             }
+        
+        logger.info(f"Final processed CVEs: {list(cves.keys())}")
         return cves
         
     except Exception as e:
