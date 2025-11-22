@@ -1,4 +1,4 @@
-## 🚀 Overview
+## Overview
 CVE (Common Vulnerabilities and Exposures) is a Python-based project that automatically sends email alerts when new vulnerabilities are detected. This project leverages the CIRCL API to fetch the latest CVEs and uses Selenium for web scraping to gather detailed information. Additionally, it employs the Perplexity API to simplify CVE descriptions for non-technical readers.
 
 ### Key Features
