@@ -304,21 +304,39 @@ def simplify_description(description: str, cve_id: str) -> str:
     logger.info(f"Calling Perplexity API to simplify description for {cve_id}")
 
     system_prompt = (
-        "You are a cybersecurity assistant. Rewrite CVE descriptions in clear, "
-        "non-technical language for non-technical stakeholders.\n\n"
-        "Rules:\n"
-        "- Explain what could happen in real-world terms (for example: 'attackers could steal customer data').\n"
-        "- Avoid jargon like SQL injection, XSS, RCE. If you must use them, briefly explain in plain English.\n"
-        "- Keep it under 5 sentences.\n"
-        "- Do NOT invent extra details that are not present in the original description.\n"
-        "- Focus on impact and risk, not implementation details."
+        "You are a cybersecurity risk translator. Your job is to rewrite technical "
+        "vulnerability descriptions into simple terms for non-technical people such as CEOs, "
+        "managers, or small business owners.\n\n"
+        "RULES:\n"
+        "Do NOT copy the original sentence structure.\n"
+        "Avoid technical terms such as RCE, SQL injection, buffer overflow, etc. "
+        "If a term MUST be mentioned, briefly define it.\n"
+        "Focus on the real-world impact (example: 'attackers could steal customer data', "
+        "'attackers could take control of the system', etc.).\n"
+        "Give a risk tone: Low / Medium / High / Critical (based on the CVSS score).\n"
+        "Maximum 5 sentences.\n"
+        "Do NOT invent details that are not present.\n"
+        "Write in clear business language.\n\n"
+        "FORMAT:\n"
+        "Short Summary: <1-sentence human-friendly explanation>\n"
+        "Impact: <what could realistically happen>\n"
+        "Risk Level: <Low/Medium/High/Critical based on score>\n"
+        "Action: <recommended response, keep general, no configs>\n\n"
+        "EXAMPLE:\n"
+        "Original: 'Improper input validation in Apache module enables crafted request to execute arbitrary code remotely.'\n"
+        "Rewritten:\n"
+        "Short Summary: An attacker could send a malicious request and take over the server.\n"
+        "Impact: If exploited, the attacker could run programs, change files, or steal information.\n"
+        "Risk Level: Critical.\n"
+        "Action: Update the software as soon as possible."
+    )
+    
+    user_prompt = (
+        f"Rewrite the following vulnerability for a non-technical audience:\n\n"
+        f"CVE ID: {cve_id}\n"
+        f"Technical description:\n{description}\n"
     )
 
-    user_prompt = (
-        f"Here is the original technical description for {cve_id}.\n\n"
-        f"Technical description:\n{description}\n\n"
-        "Rewrite this so that a non-technical manager can understand the risk."
-    )
 
     headers = {
         "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
@@ -537,3 +555,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
