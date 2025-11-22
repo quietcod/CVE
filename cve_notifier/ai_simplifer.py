@@ -36,39 +36,23 @@ def simplify_description(
 
     score_text = cvss_score or "N/A"
 
-    system_prompt = (
-        "You are a cybersecurity risk translator. Your job is to rewrite technical "
-        "vulnerability descriptions into simple terms for non-technical people such as CEOs, "
-        "managers, or small business owners.\n\n"
-        "RULES:\n"
-        "Do NOT copy the original sentence structure.\n"
-        "Avoid technical terms such as RCE, SQL injection, buffer overflow, etc. "
-        "If a term MUST be mentioned, briefly define it.\n"
-        "Focus on the real-world impact (example: 'attackers could steal customer data', "
-        "'attackers could take control of the system').\n"
-        "Give a risk tone: Low / Medium / High / Critical (based on the CVSS score if given).\n"
-        "Maximum 5 sentences.\n"
-        "Do NOT invent extra details that are not present in the original description.\n"
-        "Write in clear business language.\n\n"
-        "FORMAT:\n"
-        "Short Summary: <1-sentence human-friendly explanation>\n"
-        "Impact: <what could realistically happen>\n"
-        "Risk Level: <Low/Medium/High/Critical>\n"
-        "Action: <high-level recommended response>\n\n"
-        "EXAMPLE:\n"
-        "Original: 'Improper input validation in Apache module enables crafted request to execute arbitrary code remotely.'\n"
-        "Rewritten:\n"
-        "Short Summary: An attacker could send a malicious request and take over the server.\n"
-        "Impact: If exploited, the attacker could run programs, change files, or steal information.\n"
-        "Risk Level: Critical.\n"
-        "Action: Update the software as soon as possible.\n"
-    )
-
+    # Build a single user message, like your working project
     user_prompt = (
-        f"Rewrite the following vulnerability for a non-technical audience.\n\n"
+        "Rewrite the following vulnerability description for a non-technical audience.\n\n"
+        "Rules:\n"
+        "- Do not use security jargon like IDOR, SQL injection, XSS, etc.\n"
+        "- Focus on what could actually happen in the real world (data leak, account takeover, etc.).\n"
+        "- Use simple business language a manager can understand.\n"
+        "- Keep it under 5 sentences.\n"
+        "- Do not invent details that are not mentioned.\n\n"
+        "Output format:\n"
+        "Short Summary: <1 sentence>\n"
+        "Impact: <what an attacker could do>\n"
+        "Risk Level: <Low/Medium/High/Critical>\n"
+        "Action: <high-level recommendation>\n\n"
         f"CVE ID: {cve_id}\n"
         f"CVSS Score (if known): {score_text}\n\n"
-        f"Technical description:\n{description}\n"
+        f"Technical description:\n{description}"
     )
 
     headers = {
@@ -76,14 +60,12 @@ def simplify_description(
         "Content-Type": "application/json",
     }
 
+    # ⚠ Minimal payload – same style as your working snippet
     payload = {
-        "model": PERPLEXITY_MODEL,
+        "model": PERPLEXITY_MODEL,  # e.g., "sonar-pro"
         "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "user", "content": user_prompt}
         ],
-        "max_tokens": 220,
-        "temperature": 0.2,
     }
 
     try:
@@ -93,9 +75,16 @@ def simplify_description(
             json=payload,
             timeout=25,
         )
-        resp.raise_for_status()
-        data = resp.json()
+        if not resp.ok:
+            logger.error(
+                "Perplexity API error for %s: status=%s body=%s",
+                cve_id,
+                resp.status_code,
+                resp.text[:500],
+            )
+            return description
 
+        data = resp.json()
         simplified = (
             data.get("choices", [{}])[0]
             .get("message", {})
