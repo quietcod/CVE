@@ -38,12 +38,12 @@ jobs:
           # Added Perplexity API support (no other changes made)
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           AI_ENABLED: "true"
-          PERPLEXITY_MODEL: "sonar-small-chat"
+          PERPLEXITY_MODEL: "sonar"
           
         run: |
           echo "Chrome version: $(google-chrome --version)"
           echo "ChromeDriver available: $(which chromedriver || echo 'Not in PATH')"
-          python cve_osv.py
+          python cve.py
 
       - name: Commit and push updated CVEs
         env:
