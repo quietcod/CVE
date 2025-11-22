@@ -202,26 +202,42 @@ def scrape_cve_details_selenium(cve_id: str):
 
     return final_description, cvss_score
 
-
 def patch_with_scrape(cves: Dict[str, dict]) -> Dict[str, dict]:
-    """Fill in missing summaries and CVSS scores (plus AI plain-language summaries)."""
+    """Fill in missing summaries, normalize CVSS, and generate AI simplified version."""
+
     total_cves = len(cves)
+
     for idx, (cveid, cvedata) in enumerate(cves.items(), 1):
+        logger.info(f"Processing {cveid} ({idx}/{total_cves})")
+
+        # Make sure we have a human readable full description
         if not cvedata.get("summary"):
-            logger.info(f"Patching {cveid} ({idx}/{total_cves})...")
+            logger.info(f"Scraping {cveid} because summary missing...")
             description, cvss = scrape_cve_details_selenium(cveid)
 
             if description and description != "Description not available":
                 cvedata["summary"] = description
-
-                simplified = simplify_description(description, cveid, cvss)
-                if simplified and simplified != description:
-                    cvedata["summary_plain"] = simplified
 
             if cvss and cvss != "N/A":
                 cvedata["cvss_score"] = cvss
 
             if idx < total_cves:
                 time.sleep(SCRAPE_POLITE_DELAY)
+
+        # At this point: summary exists (scraped or provided by API)
+        description = cvedata.get("summary", "")
+
+        # Always generate AI simplified summary if AI is enabled
+        try:
+            simplified = simplify_description(description, cveid, cvedata.get("cvss_score"))
+            if simplified:
+                cvedata["summary_plain"] = simplified
+            else:
+                logger.warning(f"AI returned empty summary for {cveid}, falling back to original.")
+                cvedata["summary_plain"] = description
+
+        except Exception as e:
+            logger.error(f"AI failed for {cveid}: {e}")
+            cvedata["summary_plain"] = description  # safety fallback
 
     return cves
