@@ -4,13 +4,39 @@ import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict, Iterable
+from datetime import datetime
 
 from .config import EMAIL_PASS, EMAIL_USER, SMTP_HOST, SMTP_PORT
 
 logger = logging.getLogger(__name__)
 
 
-def send_summary_email(new_cves: Dict[str, dict], recipients: Iterable[str]) -> bool:
+def format_date(date_str: str) -> str:
+    """Convert raw CVE timestamp into: DD-MM-YYYY at HH:MM:SS UTC"""
+    if not date_str or date_str.lower() == "unknown":
+        return "Unknown"
+
+    patterns = [
+        "%Y-%m-%dT%H:%M:%S.%fZ",  # example: 2025-01-14T21:32:00.000Z
+        "%Y-%m-%dT%H:%M:%SZ",     # example: 2025-01-14T21:32:00Z
+        "%Y-%m-%d",               # fallback format: 2025-01-14
+    ]
+
+    for pattern in patterns:
+        try:
+            dt = datetime.strptime(date_str, pattern)
+            return dt.strftime("%d-%m-%Y at %H:%M:%S UTC")
+        except ValueError:
+            continue
+
+    # If no pattern matches, return raw string as fallback
+    return date_str
+
+
+def send_summary_email(
+    new_cves: Dict[str, dict],
+    recipients: Iterable[str],
+) -> bool:
     """Send the HTML summary email for the new CVEs."""
     if not EMAIL_USER or not EMAIL_PASS:
         logger.error("Email credentials not configured")
@@ -32,7 +58,7 @@ def send_summary_email(new_cves: Dict[str, dict], recipients: Iterable[str]) -> 
             .cve-item {{ border: 1px solid #ddd; margin: 15px 0; padding: 15px; border-radius: 5px; background-color: #fff; }}
             .cve-title {{ color: #d73027; margin-top: 0; margin-bottom: 10px; }}
             .description-box {{ background-color: #f8f9fa; padding: 15px; border-left: 4px solid #007bff; margin: 10px 0; }}
-            .plain-box {{ background-color: #eef7ff; padding: 15px; border-left: 4px solid #1a73e8; margin: 10px 0; }}
+            .plain-box {{ background-color: #f1f3f5; padding: 15px; border-left: 4px solid #28a745; margin: 10px 0; }}
             .metadata {{ color: #666; font-size: 14px; }}
             .cvss-high {{ color: #d73027; font-weight: bold; }}
             .cvss-medium {{ color: #fd7e14; font-weight: bold; }}
@@ -41,8 +67,8 @@ def send_summary_email(new_cves: Dict[str, dict], recipients: Iterable[str]) -> 
     </head>
     <body>
         <div class="header">
-            <h2 style="margin: 0; color: #d73027;">🚨 New CVE Vulnerabilities Found: {len(new_cves)}</h2>
-            <p style="margin: 10px 0 0 0; color: #666;">Detected on {time.strftime('%Y-%m-%d %H:%M:%S UTC')}</p>
+            <h2 style="margin: 0; color: #d73027;">🚨 New Vulnerabilities Found: {len(new_cves)}</h2>
+            <p style="margin: 10px 0 0 0; color: #666;">Detected on {time.strftime('%d-%m-%Y at %H:%M:%S UTC')}</p>
         </div>
     """
 
@@ -52,8 +78,10 @@ def send_summary_email(new_cves: Dict[str, dict], recipients: Iterable[str]) -> 
             try:
                 cvss_num = float(cvss)
                 severity_class = (
-                    "cvss-high" if cvss_num >= 7.0
-                    else "cvss-medium" if cvss_num >= 4.0
+                    "cvss-high"
+                    if cvss_num >= 7.0
+                    else "cvss-medium"
+                    if cvss_num >= 4.0
                     else "cvss-low"
                 )
             except Exception:
@@ -61,34 +89,33 @@ def send_summary_email(new_cves: Dict[str, dict], recipients: Iterable[str]) -> 
         else:
             severity_class = "metadata"
 
-        technical = cvedata.get("summary", "No description available")
-        plain = cvedata.get("summary_plain")  # <- AI summary if present
+        plain_summary = cvedata.get("summary_plain")
+        publish_date = format_date(cvedata.get("published", "Unknown"))
 
         item_html = f"""
         <div class="cve-item">
-            <h3 class="cve-title">{cveid}</h3>
             <p class="metadata">
-                <strong>CVSS Score:</strong> <span class="{severity_class}">{cvss}</span> | 
-                <strong>Source:</strong> {cvedata.get("source", "Unknown")} | 
-                <strong>Published:</strong> {cvedata.get("published", "Unknown")}
+                <strong>Name / ID :</strong> {cveid}<br>
+                <strong>CVSS Score :</strong> <span class="{severity_class}">{cvss}</span><br>
+                <strong>Severity Level :</strong> {cvedata.get("severity", "Unknown")}<br>
+                <strong>Published on :</strong> {publish_date}
             </p>
             <div class="description-box">
                 <strong>Description (technical):</strong><br>
-                {technical}
+                {cvedata.get("summary", "No description available")}
             </div>
         """
 
-        # Only show AI block if we *have* one
-        if plain:
+        if plain_summary:
             item_html += f"""
             <div class="plain-box">
-                <strong>Plain-language summary (AI-generated):</strong><br>
-                {plain}
+                <strong>Simple-language Summary:</strong><br>
+                {plain_summary}
             </div>
             """
 
         item_html += f"""
-            <p><strong>🔗 Reference:</strong> <a href="{cvedata.get("url", "")}" style="color: #007bff;">{cvedata.get("url", "")}</a></p>
+            <p><strong>🔗 For More Details:</strong> <a href="{cvedata.get("url", "")}" style="color: #007bff;">{cvedata.get("url", "")}</a></p>
         </div>
         """
 
@@ -96,9 +123,9 @@ def send_summary_email(new_cves: Dict[str, dict], recipients: Iterable[str]) -> 
 
     html += """
         <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
-        <div style="text-align: center; color: #666; font-size: 12px;">
-            <p>This alert was generated by CVE Alert System.</p>
-            <p>Plain-language summaries are generated by an AI assistant. Always verify details with the official CVE reference.</p>
+        <div style="text-align: center; color: Red; font-size: 12px;">
+            <p>Plain-language summaries are generated by an AI assistant.</p>
+            <p>Always verify details with the official CVE reference.</p>
         </div>
     </body>
     </html>
@@ -112,8 +139,12 @@ def send_summary_email(new_cves: Dict[str, dict], recipients: Iterable[str]) -> 
         server.login(EMAIL_USER, EMAIL_PASS)
         server.sendmail(EMAIL_USER, recipients, msg.as_string())
         server.quit()
-        logger.info(f"✅ Summary email sent for {len(new_cves)} CVEs to {len(recipients)} recipients")
+
+        logger.info(
+            f"✅ Summary email sent for {len(new_cves)} CVEs to {len(recipients)} recipients"
+        )
         return True
+
     except Exception as e:
         logger.error(f"❌ Error sending summary email: {e}")
         return False
