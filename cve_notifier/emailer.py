@@ -47,7 +47,7 @@ def send_summary_email(
         return False
 
     subject = f"🚨 New CVE Alerts - {len(new_cves)} vulnerabilities found"
-    msg = MIMEMULTIPART("alternative")
+    msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = EMAIL_USER
     msg["To"] = ", ".join(recipients)
@@ -151,3 +151,4 @@ def send_summary_email(
     except Exception as e:
         logger.error(f"❌ Error sending summary email: {e}")
         return False
+
