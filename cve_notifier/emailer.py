@@ -6,7 +6,7 @@ from email.mime.text import MIMEText
 from typing import Dict, Iterable
 from datetime import datetime
 
-from .config import EMAIL_PASS, EMAIL_USER, SMTP_HOST, SMTP_PORT
+from .config import EMAIL_PASS, EMAIL_USER, SMTP_HOST, SMTP_PORT, RECIPIENTS
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +35,19 @@ def format_date(date_str: str) -> str:
 
 def send_summary_email(
     new_cves: Dict[str, dict],
-    recipients: Iterable[str],
 ) -> bool:
     """Send the HTML summary email for the new CVEs."""
     if not EMAIL_USER or not EMAIL_PASS:
         logger.error("Email credentials not configured")
         return False
+        
+    recipients: list[str] = list(RECIPIENTS)
+    if not recipients:
+        logger.error("No recipients configured (RECIPIENTS is empty)")
+        return False
 
-    recipients = list(recipients)
     subject = f"🚨 New CVE Alerts - {len(new_cves)} vulnerabilities found"
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMULTIPART("alternative")
     msg["Subject"] = subject
     msg["From"] = EMAIL_USER
     msg["To"] = ", ".join(recipients)
