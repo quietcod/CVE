@@ -1,7 +1,7 @@
 import logging
 
 from .circl_client import fetch_circl_cves
-from .config import EMAIL_PASS, EMAIL_USER, RECIPIENTS
+from .config import EMAIL_PASS, EMAIL_USER
 from .emailer import send_summary_email
 from .scrapper import patch_with_scrape
 from .storage import load_seen, save_seen
@@ -39,7 +39,7 @@ def main() -> None:
             logger.info("Fetching detailed information with Selenium...")
             patched_cves = patch_with_scrape(new_cves_data)
 
-            if send_summary_email(patched_cves, RECIPIENTS):
+            if send_summary_email(patched_cves):
                 logger.info("Email sent successfully")
             else:
                 logger.error("Failed to send email")
