@@ -48,7 +48,8 @@ export EMAIL_USER="your_email@example.com"
 export EMAIL_PASS="your_email_password"
 export PERPLEXITY_API_KEY="your_perplexity_api_key"
 export AI_ENABLED="true"
-export PERPLEXITY_MODEL="sonar-small-chat"
+export PERPLEXITY_MODEL="sonar"
+export ALERT_RECIPIENTS="person1@mail.com,person2@mail.com"
 ```
 
 ### Alternative Installation Methods
@@ -104,7 +105,7 @@ To deploy the CVE project, follow these steps:
 
 1. **Set Up GitHub Actions**:
    - The project uses GitHub Actions for scheduling and running the CVE alert script.
-   - Ensure that the necessary secrets (`EMAIL_USER`, `EMAIL_PASS`, `PERPLEXITY_API_KEY`, `GH_TOKEN`) are set up in the GitHub repository settings.
+   - Ensure that the necessary secrets (`EMAIL_USER`, `EMAIL_PASS`, `PERPLEXITY_API_KEY`, `GH_TOKEN`, `ALERT_RECIPIENT`) are set up in the GitHub repository settings.
 
 2. **Schedule the Workflow**:
    - The workflow is scheduled to run every 12 hours (`0 */12 * * *`).
@@ -120,10 +121,13 @@ To deploy the CVE project, follow these steps:
   - `EMAIL_PASS`: App password.
   - `PERPLEXITY_API_KEY`: (optional) enables AI summaries when `AI_ENABLED=true`.
   - `AI_ENABLED`: "true" or "false".
-  - `PERPLEXITY_MODEL`: AI model to use (default: "sonar-small-chat").
-
-- **Configuration Files**:
-  - `cve_notifier/config.py`: Contains configuration settings for email, AI, and API.
+  - `PERPLEXITY_MODEL`: AI model to use (default: "sonar").
+  - `ALERT_RECIPIENT`: List of all Recipients
+      - Managing Recipients
+        Use a comma-separated format:
+        ```
+        email1@example.com,email2@example.com,email3@example.com
+        ```
 
 ## 🤝 Contributing
 - Fork the repository
