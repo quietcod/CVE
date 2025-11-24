@@ -19,7 +19,8 @@ SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
 # Recipients + state file
-RECIPIENTS = ["quietcod@protonmail.com"]
+_raw_recipients = os.getenv("ALERT_RECIPIENTS", "")
+RECIPIENTS = [email.strip() for email in _raw_recipients.split(",") if email.strip()]
 SEEN_FILE = "seen_cves.json"
 
 # Perplexity AI config
@@ -27,3 +28,4 @@ PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 AI_ENABLED = os.getenv("AI_ENABLED", "false").lower() == "true"
 PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "sonar-small-chat")
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
+
