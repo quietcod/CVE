@@ -34,6 +34,7 @@ jobs:
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          ALERT_RECIPIENTS: ${{ secrets.ALERT_RECIPIENTS }}
 
           # Added Perplexity API support (no other changes made)
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
