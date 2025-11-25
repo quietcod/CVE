@@ -46,10 +46,6 @@ export PERPLEXITY_MODEL="sonar"
 export ALERT_RECIPIENTS="person1@mail.com,person2@mail.com"
 ```
 
-### Alternative Installation Methods
-- **Docker**: (if applicable)
-- **Development Setup**: (if applicable)
-
 ## 🎯 Usage
 
 ### Basic Usage
