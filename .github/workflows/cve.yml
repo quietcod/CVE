@@ -2,7 +2,7 @@ name: CVE Email Alerts
 
 on:
   schedule:
-    - cron: '0 */12 * * *'  # Every 12 hours
+    - cron: '0 */24 * * *'  # Every 24 hours
   workflow_dispatch:  # Manual trigger
 
 permissions:
