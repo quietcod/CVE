@@ -1,137 +1,125 @@
-## 📌 Overview
-CVE (Common Vulnerabilities and Exposures) is a Python-based project that automatically sends email alerts when new vulnerabilities are detected. This project leverages the CIRCL API to fetch the latest CVEs and uses Selenium for web scraping to gather detailed information. Additionally, it employs the Perplexity API to simplify CVE descriptions for non-technical readers.
+# CVE Notification System 🛡️
 
-### Who This Project Is For
-- Security professionals
-- Developers
-- IT administrators
-- Anyone interested in staying informed about new vulnerabilities
+This project is a CVE (Common Vulnerabilities and Exposures) notification system that keeps you informed about the latest security vulnerabilities. It fetches CVE data from the CIRCL API, identifies new CVEs, enriches them with additional information scraped from the web, and sends email notifications to a list of recipients. The system also uses AI to simplify complex CVE descriptions, making them easier to understand.
 
-## ✨ Features
-- 📧 **Email Alerts**: Automatically notify you via email when new CVEs are detected.
-- 🔍 **Web Scraping**: Extract detailed information from CVE.org using Selenium.
-- 🤖 **AI Simplification**: Simplify CVE descriptions for non-technical users.
-- 📅 **Scheduled Runs**: Run the script every 12 hours using GitHub Actions.
+## 🚀 Key Features
+
+- **CVE Data Fetching:** Retrieves the latest CVE data from the CIRCL API.
+- **New CVE Identification:** Compares fetched CVEs with a list of previously seen CVEs to identify new vulnerabilities.
+- **CVE Enrichment:** Scrapes additional information about CVEs from external sources, including descriptions and CVSS scores.
+- **AI-Powered Simplification:** Uses the Perplexity AI API to simplify technical CVE descriptions into plain language.
+- **Email Notifications:** Sends email notifications containing summaries of new CVEs to a configurable list of recipients.
+- **State Management:** Persists the list of seen CVEs to avoid sending duplicate notifications.
+- **Configurable:**  Easily configurable via environment variables for API keys, email settings, and other parameters.
+- **Polite Scraping:** Implements delays between scraping requests to avoid overloading target websites.
+- **Error Handling:** Robust error handling and logging throughout the application.
 
 ## 🛠️ Tech Stack
-- **Programming Language**: Python
-- **Libraries**: `requests`, `selenium`, `webdriver-manager`
-- **Tools**: GitHub Actions, Perplexity API
-- **System Requirements**: Python 3.11, Chrome browser
 
-## 📦 Installation
+- **Backend:**
+    - Python 3.x
+- **API Client:**
+    - `requests`
+- **Web Scraping:**
+    - `selenium`
+    - `webdriver_manager`
+- **AI Simplification:**
+    - Perplexity AI API
+- **Email:**
+    - `smtplib`
+    - `email.mime`
+- **Data Storage:**
+    - `json` (for storing seen CVEs)
+- **Configuration:**
+    - `os` (for environment variables)
+- **Logging:**
+    - `logging` (Python's built-in logging library)
+
+## 📦 Getting Started
 
 ### Prerequisites
-- Python 3.11
-- Chrome browser
-- GitHub account
 
-### Quick Start
-```bash
-# Clone the repository
-git clone https://github.com/quietcod/CVE.git
+- Python 3.x installed
+- Pip package manager
+- Google Chrome installed (for web scraping)
+- ChromeDriver (automatically managed by `webdriver_manager`, but may require manual installation if facing issues)
+- Perplexity AI API key (optional, for AI-powered simplification)
+- Email account with app password enabled (for sending email notifications)
 
-# Navigate to the project directory
-cd CVE
+### Installation
 
-# Install dependencies
-pip install -r requirements.txt
+1.  Clone the repository:
 
-# Set up environment variables
-export EMAIL_USER="your_email@example.com"
-export EMAIL_PASS="your_email_password"
-export PERPLEXITY_API_KEY="your_perplexity_api_key"
-export AI_ENABLED="true"
-export PERPLEXITY_MODEL="sonar"
-export ALERT_RECIPIENTS="person1@mail.com,person2@mail.com"
+    ```bash
+    git clone <repository_url>
+    cd <repository_directory>
+    ```
+
+2.  Create a virtual environment (recommended):
+
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate  # On Linux/macOS
+    venv\Scripts\activate  # On Windows
+    ```
+
+3.  Install the dependencies:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+### Running Locally
+
+1.  Set the required environment variables:
+
+    ```bash
+    export EMAIL_USER="your_email@gmail.com"
+    export EMAIL_PASS="your_email_app_password"
+    export RECIPIENTS="recipient1@example.com,recipient2@example.com"
+    export PERPLEXITY_API_KEY="your_perplexity_api_key" # Optional, if AI_ENABLED=True
+    ```
+
+    **Note:** It's highly recommended to set these environment variables in a `.env` file and load them using a library like `python-dotenv`.
+
+2.  Run the `cve.py` script:
+
+    ```bash
+    python cve.py
+    ```
+
+    This will start the CVE notification system, which will fetch CVE data, identify new CVEs, and send email notifications.
+
+## 📂 Project Structure
+
 ```
-
-## 🎯 Usage
-
-### Basic Usage
-```python
-# Run the script
-python cve.py
-```
-
-### Advanced Usage
-- **Configuration**: Modify `cve_notifier/config.py` to set custom email and AI configurations.
-- **Customization**: Adjust the `cve_notifier/ai_simplifer.py` and `cve_notifier/scrapper.py` modules to fit specific needs.
-
-## 📁 Project Structure
-```
-CVE/
-├── cve.py
-├── cve_notifier/
+.
+├── cve.py                      # Main entry point of the application
+├── cve_notifier
 │   ├── __init__.py
-│   ├── ai_simplifer.py
-│   ├── circl_client.py
-│   ├── config.py
-│   ├── emailer.py
-│   ├── main.py
-│   ├── scrapper.py
-│   └── storage.py
-├── seen_cves.json
-├── requirements.txt
-└── .github/
-    └── workflows/
-        └── cve.yml
+│   ├── main.py                 # Core logic of the CVE notification system
+│   ├── config.py               # Configuration parameters
+│   ├── circl_client.py         # Client for interacting with the CIRCL API
+│   ├── storage.py              # Manages persistence of seen CVE IDs
+│   ├── scrapper.py             # Scrapes CVE details from websites
+│   ├── ai_simplifer.py         # Simplifies CVE descriptions using AI
+│   ├── emailer.py              # Sends email notifications
+├── requirements.txt            # Project dependencies
+└── README.md                   # This file
 ```
-
-### 🧱 Architecture Overview
-
-The CVE project is designed to automatically send email alerts when new vulnerabilities are found. The architecture consists of several components:
-
-1. **CVE Notifier**: The main module that orchestrates the process of fetching new CVEs, processing them, and sending email alerts.
-2. **CIRCL Client**: A module that fetches the latest CVEs from the CIRCL API.
-3. **AI Simplifier**: A module that uses the Perplexity API to simplify technical CVE descriptions into plain language.
-4. **Emailer**: A module that sends email alerts to specified recipients.
-5. **Scraper**: A module that uses Selenium to scrape detailed information about CVEs from websites.
-6. **Storage**: A module that handles the persistence of seen CVE IDs.
-
-### Deployment Instructions
-
-To deploy the CVE project, follow these steps:
-
-1. **Set Up GitHub Actions**:
-   - The project uses GitHub Actions for scheduling and running the CVE alert script.
-   - Ensure that the necessary secrets (`EMAIL_USER`, `EMAIL_PASS`, `PERPLEXITY_API_KEY`, `GH_TOKEN`, `ALERT_RECIPIENT`) are set up in the GitHub repository settings.
-
-2. **Schedule the Workflow**:
-   - The workflow is scheduled to run every 12 hours (`0 */12 * * *`).
-   - You can also manually trigger the workflow using the GitHub Actions interface.
-
-3. **Run the Script**:
-   - The script is executed using the `main.py` entry point.
-   - It fetches new CVEs, processes them, and sends email alerts if new CVEs are found.
-
-## 🔧 Configuration
-- **Environment Variables**:
-  - `EMAIL_USER`: Email sender login.
-  - `EMAIL_PASS`: App password.
-  - `PERPLEXITY_API_KEY`: (optional) enables AI summaries when `AI_ENABLED=true`.
-  - `AI_ENABLED`: "true" or "false".
-  - `PERPLEXITY_MODEL`: AI model to use (default: "sonar").
-  - `ALERT_RECIPIENT`: List of all Recipients
-      - Managing Recipients
-        Use a comma-separated format:
-        ```
-        email1@example.com,email2@example.com,email3@example.com
-        ```
 
 ## 🤝 Contributing
-- Fork the repository
-- Create a new branch (`git checkout -b feature/your-feature`)
-- Commit your changes (`git commit -am 'Add some feature'`)
-- Push to the branch (`git push origin feature/your-feature`)
-- Open a Pull Request
 
-### Code Style Guidelines
-- Follow PEP 8 style guide
-- Use meaningful variable and function names
-- Add comments to complex code sections
+Contributions are welcome! Please feel free to submit pull requests or open issues to suggest improvements or report bugs.
 
-### Pull Request Process
-- Ensure your code is well-tested
-- Write clear commit messages
-- Address any feedback from reviewers
+## 📝 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+## 📬 Contact
+
+If you have any questions or suggestions, feel free to contact me at [quietcod@protonmail.com](mailto:quietcod@protonmail.com).
+
+## 💖 Thanks
+
+Thanks for checking out this project! I hope it helps you stay informed about the latest security vulnerabilities.
