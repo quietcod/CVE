@@ -1,6 +1,7 @@
 import logging
 import smtplib
 import time
+import json
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict, Iterable
@@ -40,7 +41,7 @@ def send_summary_email(
     if not EMAIL_USER or not EMAIL_PASS:
         logger.error("Email credentials not configured")
         return False
-        
+
     recipients: list[str] = list(RECIPIENTS)
     if not recipients:
         logger.error("No recipients configured (RECIPIENTS is empty)")
@@ -77,48 +78,59 @@ def send_summary_email(
 
     for cveid, cvedata in new_cves.items():
         cvss = cvedata.get("cvss_score", "N/A")
+        severity_label = "Unknown"
+        severity_class = "metadata"
+
         if cvss != "N/A":
             try:
                 cvss_num = float(cvss)
-                severity_class = (
-                    "cvss-high"
-                    if cvss_num >= 7.0
-                    else "cvss-medium"
-                    if cvss_num >= 4.0
-                    else "cvss-low"
-                )
+                if cvss_num >= 9.0:
+                    severity_label = "Critical"
+                    severity_class = "cvss-high"
+                elif cvss_num >= 7.0:
+                    severity_label = "High"
+                    severity_class = "cvss-high"
+                elif cvss_num >= 4.0:
+                    severity_label = "Medium"
+                    severity_class = "cvss-medium"
+                else:
+                    severity_label = "Low"
+                    severity_class = "cvss-low"
             except Exception:
-                severity_class = "metadata"
-        else:
-            severity_class = "metadata"
+                pass
 
         plain_summary = cvedata.get("summary_plain")
+        ai_data = {}
+        if plain_summary:
+            try:
+                ai_data = json.loads(plain_summary)
+            except json.JSONDecodeError:
+                # Fallback if it's just text (e.g. API failed and returned description)
+                pass
+
         publish_date = format_date(cvedata.get("published", "Unknown"))
 
         item_html = f"""
         <div class="cve-item">
-            <p class="metadata">
-                <strong>Name / ID :</strong> {cveid}<br>
-                <strong>CVSS Score :</strong> <span class="{severity_class}">{cvss}</span><br>
-                <strong>Severity Level :</strong> {cvedata.get("severity", "Unknown")}<br>
-                <strong>Published on :</strong> {publish_date}
-            </p>
-            <div class="description-box">
-                <strong>Description (technical):</strong><br>
-                {cvedata.get("summary", "No description available")}
-            </div>
+            <ul style="list-style-type: disc; padding-left: 20px; margin: 0;">
+                <li style="margin-bottom: 5px;"><strong>CVE ID:</strong> {cveid}</li>
+                <li style="margin-bottom: 5px;"><strong>Published:</strong> {publish_date}</li>
+                <li style="margin-bottom: 5px;"><strong>CVSS Score:</strong> <span class="{severity_class}">{cvss} ({severity_label})</span></li>
+                <li style="margin-bottom: 5px;"><strong>Full Description:</strong> "{cvedata.get("summary", "No description available")}"</li>
         """
 
-        if plain_summary:
-            item_html += f"""
-            <div class="plain-box">
-                <strong>Simple-language Summary:</strong><br>
-                {plain_summary}
-            </div>
-            """
+        if ai_data.get("affected_versions"):
+            item_html += f'<li style="margin-bottom: 5px;"><strong>Affected Versions:</strong> {ai_data["affected_versions"]}</li>'
+        
+        if ai_data.get("impact"):
+            item_html += f'<li style="margin-bottom: 5px;"><strong>Impact:</strong> {ai_data["impact"]}</li>'
+            
+        if ai_data.get("mitigation"):
+            item_html += f'<li style="margin-bottom: 5px;"><strong>Mitigation:</strong> {ai_data["mitigation"]}</li>'
 
         item_html += f"""
-            <p><strong>🔗 For More Details:</strong> <a href="{cvedata.get("url", "")}" style="color: #007bff;">{cvedata.get("url", "")}</a></p>
+            </ul>
+            <p style="margin-top: 15px;"><strong>🔗 Reference:</strong> <a href="{cvedata.get("url", "")}" style="color: #007bff;">{cvedata.get("url", "")}</a></p>
         </div>
         """
 
@@ -151,5 +163,3 @@ def send_summary_email(
     except Exception as e:
         logger.error(f"❌ Error sending summary email: {e}")
         return False
-
-
