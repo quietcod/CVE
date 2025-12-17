@@ -51,7 +51,7 @@ def send_summary_email(
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"CVE Alert <{EMAIL_USER}>"
-    msg["To"] = ", ".join(recipients)
+    # msg["To"] will be set individually for each recipient
 
     html = f"""
     <html>
@@ -152,7 +152,20 @@ def send_summary_email(
         server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
         server.starttls()
         server.login(EMAIL_USER, EMAIL_PASS)
-        server.sendmail(EMAIL_USER, recipients, msg.as_string())
+
+        # Send individual emails to each recipient
+        for recipient in recipients:
+            # Create a copy of the message object or just update the 'To' header
+            # Updating the header on the same object is risky if we were doing this async,
+            # but in a simple loop it's fine as long as we reset it or use a fresh object.
+            # However, 'msg' is already fully constructed.
+            # The safest way is to update the 'To' header before sending each time.
+            
+            del msg["To"]
+            msg["To"] = recipient
+            
+            server.sendmail(EMAIL_USER, [recipient], msg.as_string())
+        
         server.quit()
 
         logger.info(
