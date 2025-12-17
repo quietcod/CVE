@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Optional
 
@@ -38,18 +39,23 @@ def simplify_description(
 
     # Build a single user message, like your working project
     user_prompt = (
-        "Rewrite the following vulnerability description for a non-technical audience.\n\n"
+        "Analyze the following vulnerability description and extract/infer the following details:\n"
+        "- Affected Versions\n"
+        "- Impact (what an attacker could do)\n"
+        "- Mitigation (suggested action)\n\n"
         "Rules:\n"
-        "- Do not use security jargon like IDOR, SQL injection, XSS, etc.\n"
-        "- Focus on what could actually happen in the real world (data leak, account takeover, etc.).\n"
-        "- Use simple business language a manager can understand.\n"
-        "- Keep it under 5 sentences.\n"
-        "- Do not invent details that are not mentioned.\n\n"
+        "- Do not use security jargon like IDOR, SQL injection, XSS, etc. in the Impact/Mitigation unless necessary.\n"
+        "- Focus on real-world consequences.\n"
+        "- Be concise.\n"
+        "- Do not invent details.\n\n"
         "Output format:\n"
-        "Short Summary: <1 sentence>\n"
-        "Impact: <what an attacker could do>\n"
-        "Risk Level: <Low/Medium/High/Critical>\n"
-        "Action: <high-level recommendation>\n\n"
+        "Return ONLY a valid JSON object with the following keys:\n"
+        "{\n"
+        '  "affected_versions": "...",\n'
+        '  "impact": "...",\n'
+        '  "mitigation": "..."\n'
+        "}\n"
+        "Do not include markdown formatting (like ```json).\n\n"
         f"CVE ID: {cve_id}\n"
         f"CVSS Score (if known): {score_text}\n\n"
         f"Technical description:\n{description}"
@@ -85,19 +91,38 @@ def simplify_description(
             return description
 
         data = resp.json()
-        simplified = (
+        content = (
             data.get("choices", [{}])[0]
             .get("message", {})
             .get("content", "")
             .strip()
         )
 
-        if not simplified:
+        # Clean up markdown code blocks if present
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+
+        if not content:
             logger.warning(f"Perplexity returned empty content for {cve_id}")
             return description
 
-        logger.info(f"Got simplified description for {cve_id} from Perplexity")
-        return simplified
+        # Validate JSON
+        try:
+            json.loads(content)
+            logger.info(f"Got simplified description for {cve_id} from Perplexity")
+            return content
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse JSON from Perplexity for {cve_id}: {content}")
+            return description
+
+    except Exception as e:
+        logger.error(f"Error calling Perplexity API: {e}")
+        return description
 
     except Exception as e:
         logger.error(f"Error calling Perplexity API for {cve_id}: {e}")
