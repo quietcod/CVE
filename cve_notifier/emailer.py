@@ -46,10 +46,10 @@ def send_summary_email(
         logger.error("No recipients configured (RECIPIENTS is empty)")
         return False
 
-    subject = f"🚨 New CVE Alerts - {len(new_cves)} vulnerabilities found"
+    subject = f"{len(new_cves)} Vulnerabilities Found"
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = EMAIL_USER
+    msg["From"] = f"CVE Alert <{EMAIL_USER}>"
     msg["To"] = ", ".join(recipients)
 
     html = f"""
@@ -151,4 +151,5 @@ def send_summary_email(
     except Exception as e:
         logger.error(f"❌ Error sending summary email: {e}")
         return False
+
 
