@@ -71,7 +71,7 @@ def send_summary_email(
     </head>
     <body>
         <div class="header">
-            <h2 style="margin: 0; color: #d73027;">🚨 New Vulnerabilities Found: {len(new_cves)}</h2>
+            <h2 style="margin: 0; color: #d73027;">{len(new_cves)} Vulnerabilities Found</h2>
             <p style="margin: 10px 0 0 0; color: #666;">Detected on {time.strftime('%d-%m-%Y at %H:%M:%S UTC')}</p>
         </div>
     """
@@ -176,3 +176,4 @@ def send_summary_email(
     except Exception as e:
         logger.error(f"❌ Error sending summary email: {e}")
         return False
+
