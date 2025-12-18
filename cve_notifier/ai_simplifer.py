@@ -42,7 +42,7 @@ def simplify_description(
         "Analyze the following vulnerability description and extract/infer the following details:\n"
         "- Affected Versions\n"
         "- Impact (what an attacker could do)\n"
-        "- Mitigation (suggested action)\n\n"
+        "- Solution (suggested action)\n\n"
         "Rules:\n"
         "- Do not use security jargon like IDOR, SQL injection, XSS, etc. in the Impact/Mitigation unless necessary.\n"
         "- Focus on real-world consequences.\n"
@@ -53,7 +53,7 @@ def simplify_description(
         "{\n"
         '  "affected_versions": "...",\n'
         '  "impact": "...",\n'
-        '  "mitigation": "..."\n'
+        '  "Solution": "..."\n'
         "}\n"
         "Do not include markdown formatting (like ```json).\n\n"
         f"CVE ID: {cve_id}\n"
@@ -127,3 +127,4 @@ def simplify_description(
     except Exception as e:
         logger.error(f"Error calling Perplexity API for {cve_id}: {e}")
         return description
+
